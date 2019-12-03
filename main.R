@@ -7,6 +7,7 @@
 library(evd)
 library(evdbayes)
 library(ismev)
+library(tseries)
 
 load("VanNuys.RData")
 
@@ -44,8 +45,6 @@ plot(year[ffwi_measured], ffwi[ffwi_measured])
 # Auto Correlation Functions
 # acf(wind[wind_measured], lag.max = 400)
 # acf(ffwi[ffwi_measured], lag.max = 400)
-exiplot(ffwi[ffwi_measured], tlim=c(50,90))
-exiplot(ffwi[wind_measured], tlim=c(20,80))
 
 
 #
@@ -67,20 +66,34 @@ plot(fit_GEV_wind)
 fit_GEV_wind
 plot(profile(fit_GEV_wind))
 
-qu.min = quantile(wind[wind_measured], 0.5)
-qu.max = quantile(wind[wind_measured],(length(wind[wind_measured])-30)/length(wind[wind_measured]))
-mrlplot(wind[wind_measured], tlim=c(qu.min, qu.max))
-tcplot(wind[wind_measured],tlim=c(qu.min, qu.max))
+# Get new indices for POT
+th = 24
+wind = as.numeric(VanNuys[,1])
+wind = jitter(wind, amount = 0.6)
+wind[!wind_measured] = 0
+wind_pot_indices = wind_measured & year >= 1998 & (day_of_year < 160 | day_of_year > 280)
+plot(day_of_year[wind > th],wind[wind>th])
+adf.test(wind[wind_pot_indices])
 
-th = 25
-fit_PP_wind = fpot(wind[wind_measured],threshold=th,model="pp") #TODO: Super shitty!
+qu.min = quantile(wind[wind_pot_indices], 0.5)
+qu.max = quantile(wind[wind_pot_indices],(length(wind[wind_pot_indices])-30)/length(wind[wind_pot_indices]))
+mrlplot(wind[wind_pot_indices], tlim=c(qu.min, qu.max))
+tcplot(wind[wind_pot_indices],tlim=c(qu.min, qu.max))
+exiplot(wind[wind_pot_indices], tlim=c(20,30))
+
+fit_PP_wind = fpot(wind[wind_pot_indices],threshold=th,model="pp")
 plot(fit_PP_wind)
 fit_PP_wind
+
+fit_PP_wind_gumble = fpot(wind[wind_pot_indices],threshold=th,model="pp", shape=0)
+plot(fit_PP_wind_gumble)
+fit_PP_wind_gumble
 
 
 #
 # --- UNIVARIATE FFWI ---
 #
+# TODO: check which quantile we dont exceed until ~1992
 ffwi_maxima = array(0,43) # Initialize array
 for(j in 1:43){
   ffwi_maxima[j]= max(ffwi[year == 1972 +j])
@@ -93,19 +106,24 @@ ffwi_maxima_years = ffwi_maxima_years[-15]
 ffwi_maxima_years = ffwi_maxima_years[-(1:7)]
 plot(ffwi_maxima_years,ffwi_maxima)
 qqplot(qgumbel(c(1:42)/43),ffwi_maxima)
-
 fit_GEV_ffwi = fgev(ffwi_maxima,method="Nelder-Mead")
 plot(fit_GEV_ffwi)
 fit_GEV_wind
 plot(profile(fit_GEV_ffwi))
 
-qu.min = quantile(ffwi[ffwi_measured], 0.5)
-qu.max = quantile(ffwi[ffwi_measured],(length(ffwi[ffwi_measured])-30)/length(ffwi[ffwi_measured]))
-mrlplot(ffwi[ffwi_measured], tlim=c(qu.min, qu.max))
-tcplot(ffwi[ffwi_measured],tlim=c(qu.min, qu.max))
+# Get new indices for POT
+th = 70
+plot(day_of_year[ffwi > th],ffwi[ffwi>th])
+ffwi_pot_indices = ffwi_measured & (day_of_year < 160 | day_of_year > 280)
+adf.test(ffwi[ffwi_pot_indices])
 
-th = 65 #TODO: check threshold assumptions 
-fit_PP_ffwi = fpot(ffwi[ffwi_measured],threshold=th,model="pp")
+qu.min = quantile(ffwi[ffwi_pot_indices], 0.5)
+qu.max = quantile(ffwi[ffwi_pot_indices],(length(ffwi[ffwi_pot_indices])-30)/length(ffwi[ffwi_pot_indices]))
+mrlplot(ffwi[ffwi_pot_indices], tlim=c(qu.min, qu.max))
+tcplot(ffwi[ffwi_pot_indices],tlim=c(qu.min, qu.max))
+exiplot(ffwi[ffwi_pot_indices], tlim=c(40,80))
+
+fit_PP_ffwi = fpot(ffwi[ffwi_pot_indices],threshold=th,model="pp")
 plot(fit_PP_ffwi)
 fit_PP_ffwi
 
@@ -138,46 +156,25 @@ fit_PP_ffwi
 # plot(apply(matrix(wind[wind_measured], ncol = 20), 1, mean))
 # plot(apply(matrix(ffwi[ffwi_measured], ncol = 120), 1, mean))
 
-#fit GPD-ffwi
-qu.min = quantile(ffwi[ffwi_measured], 0.5)
-qu.max = quantile(ffwi[ffwi_measured],(length(ffwi[ffwi_measured])-30)/length(ffwi[ffwi_measured]))
-mrlplot(ffwi[ffwi_measured], tlim=c(qu.min, qu.max))
-tcplot(ffwi[ffwi_measured],tlim=c(qu.min, qu.max))
-
-th = 63 #TODO: check threshold assumptions 
-fit_GPD_ffwi = fpot(ffwi[ffwi_measured],threshold=th)
-
-# check fit
-plot(fit_GPD_ffwi) #prob. plot wiggling out, QQ wiggling, density ok, return wiggling
-#wiggling because of discreteness, step distance 3 dealt with in next chapter
 
 #exceedence rate
-plot(day_of_year[ffwi>th],ffwi[ffwi>th])
-exceedence_per_day = array(0,366)
-for(j in 1:366){
-  numerator = sum(ffwi[day_of_year == 3 && ffwi_measured])
-  exceedence_per_day[j] = length(ffwi[day_of_year==j & ffwi>th])/length(ffwi[day_of_year==j])
-}
-plot(c(1:366),exceedence_per_day)
+# exceedence_per_day = array(0,366)
+# for(j in 1:366){
+#   numerator = sum(ffwi[day_of_year == 3 && ffwi_measured])
+#   exceedence_per_day[j] = length(ffwi[day_of_year==j & ffwi>th])/length(ffwi[day_of_year==j])
+# }
+# plot(c(1:366),exceedence_per_day)
 
-# profile log-likelihood for both parameters
-# par(mfrow=c(1,2))
-plot(profile(fit_GPD_ffwi))
-abline(v=0,col=2,lty=2) # 0 not inside of the confidence intervals
-# par(mfrow=c(1,1))
-
-# fit shape=0
-fit_GPD_ffwi_gum = fpot(ffwi[ffwi_measured], threshold=th, shape=0)
-plot(fit_GPD_ffwi_gum) # almost same, maybe a little worse
+# abline(v=0,col=2,lty=2) # 0 not inside of the confidence intervals
 
 # deal with varying variance
-plot(date[ffwi>th],ffwi[ffwi>th])
-fit_GPD_ffwi_linkfit = gpd.fit(ffwi[ffwi_measured],threshold=th,ydat=as.matrix(scale(date)),sigl=1,siglink=exp)
-gpd.diag(fit_GPD_ffwi_linkfit) #TODO: ??
+# plot(date[ffwi>th],ffwi[ffwi>th])
+# fit_GPD_ffwi_linkfit = gpd.fit(ffwi[ffwi_measured],threshold=th,ydat=as.matrix(scale(date)),sigl=1,siglink=exp)
+# gpd.diag(fit_GPD_ffwi_linkfit) #TODO: ??
 
-
-## eliminating bad data & discreteness
-# create elimination vectors
+# 
+# ## eliminating bad data & discreteness
+# # create elimination vectors
 # good_dates = (year>1992) & (ffwi_measured) & ((day_of_year<150) | (day_of_year>280))
 # plot(good_dates)
 # 
@@ -191,19 +188,19 @@ gpd.diag(fit_GPD_ffwi_linkfit) #TODO: ??
 # mrlplot(ffwi[good_dates], tlim=c(qu.min, qu.max))
 # tcplot(ffwi[good_dates],tlim=c(qu.min, qu.max))
 # 
-# th = 55 #TODO: check threshold assumptions 
+# th = 55 #TODO: check threshold assumptions
 # fit_GPD_ffwi = fpot(ffwi[good_dates],threshold=th)
 # 
 # # check fit
 # plot(fit_GPD_ffwi) #prob. plot wiggling out, QQ wiggling, density ok, return wiggling
-
+# 
 
 ##
 # fit PP-ffwi
 #choose threshold as before, compare with...
-# u = quantile(ffwi[ffwi_measured],0.95)
-fit_PP_ffwi = fpot(ffwi[good_dates],threshold=th,model="pp")
-# plot(fit_PP_ffwi) #same as before
+# # u = quantile(ffwi[ffwi_measured],0.95)
+# fit_PP_ffwi = fpot(ffwi[good_dates],threshold=th,model="pp")
+# # plot(fit_PP_ffwi) #same as before
 
 ##
 ## --- CHAPTER 3: BIVARIATE ANALYSIS ---
@@ -215,10 +212,12 @@ wind_maxima = wind_maxima[-(1:7)]
 M = cbind(bivariate_years, ffwi_maxima, wind_maxima)
 
 fit_bi_gev = fbvevd(M[,-1], model = "log") # TODO: try different values of model
-plot(fit_bi_gev, mar = 2) # "which" argument tells which plots to generate
-plot(fit_bi_gev)
+plot(fit_bi_gev) # "which" argument tells which plots to generate
 
-q_ffwi = quantile(ffwi[ffwi_measured], 0.95)
-q_wind = quantile(wind[wind_measured], 0.95)
-fit_bi_pot = fbvpot(M[,-1], c(q_ffwi, q_wind), model = "log")
+# 3.2 - POT
+q_ffwi = quantile(ffwi[ffwi_pot_indices], 0.95)
+q_wind = quantile(wind[wind_pot_indices], 0.95)
+bi_pot_indices = wind_pot_indices & ffwi_pot_indices
+M_all = cbind(year, ffwi, wind)
+fit_bi_pot = fbvpot(M_all[bi_pot_indices,-1], c(q_ffwi, q_wind), model = "log")
 plot(fit_bi_pot)
