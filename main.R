@@ -9,6 +9,8 @@ library(evdbayes)
 library(ismev)
 library(tseries)
 
+set.seed(42)
+
 load("VanNuys.RData")
 
 date = seq(as.Date("1973-03-31"),as.Date("2015-05-31"),by="days") # Creates a date vector
@@ -211,13 +213,31 @@ bivariate_years = ffwi_maxima_years
 wind_maxima = wind_maxima[-(1:7)]
 M = cbind(bivariate_years, ffwi_maxima, wind_maxima)
 
+# One step approach
 fit_bi_gev = fbvevd(M[,-1], model = "log") # TODO: try different values of model
+# See which models give asymmetry ==> BAD!
 plot(fit_bi_gev) # "which" argument tells which plots to generate
 
+# Two step approach
+fit_bi_frechet.mar1 = fgev(ffwi_maxima)
+fit_bi_frechet.mar2 = fgev(wind_maxima)
+rescaled_ffwi_maxima = qgev(pgev(ffwi_maxima, loc=fit_bi_frechet.mar1$param["loc"], scale=fit_bi_frechet.mar1$param["scale"],
+        shape=fit_bi_frechet.mar1$param["shape"]), loc=1, scale=1, shape=1)
+rescaled_wind_maxima = qgev(pgev(wind_maxima, loc=fit_bi_frechet.mar2$param["loc"], scale=fit_bi_frechet.mar2$param["scale"],
+        shape=fit_bi_frechet.mar2$param["shape"]), loc=1, scale=1, shape=1)
+fit_bi_frechet = fbvevd(cbind(rescaled_ffwi_maxima, rescaled_wind_maxima), cscale = TRUE, cshape = TRUE, cloc = TRUE,
+        loc1 = 1, scale1 = 1, shape1 = 1)
+plot(fit_bi_frechet)
+
 # 3.2 - POT
-q_ffwi = quantile(ffwi[ffwi_pot_indices], 0.95)
+q_ffwi = quantile(ffwi[ffwi_pot_indices], 0.95) # Seems to be okay to use 0.95. (stefano did that)
 q_wind = quantile(wind[wind_pot_indices], 0.95)
 bi_pot_indices = wind_pot_indices & ffwi_pot_indices
 M_all = cbind(year, ffwi, wind)
 fit_bi_pot = fbvpot(M_all[bi_pot_indices,-1], c(q_ffwi, q_wind), model = "log")
 plot(fit_bi_pot)
+
+# EVIR
+library(evir)
+fit_bi_pot_evir = gpdbiv(ffwi[bi_pot_indices], wind[bi_pot_indices], q_ffwi, q_wind)
+interpret.gpdbiv(fit_bi_pot_evir, q_ffwi, q_wind)
