@@ -8,19 +8,20 @@ library(evd)
 library(evdbayes)
 library(ismev)
 library(tseries)
+library(evir)
 
 set.seed(42) # 42: The answer to everything
 
 load("VanNuys.RData")
 
-date = seq(as.Date("1973-03-31"),as.Date("2015-05-31"),by="days") # Creates a date vector
+date = seq(as.Date("1973-03-31"),as.Date("2015-05-31"),by="days") # Creates a date vector same length as wind and ffwi
 wind = as.numeric(VanNuys[,1])
 ffwi = as.numeric(VanNuys[,2])
 
-month=months(date, abbreviate=FALSE)
+month = months(date, abbreviate=FALSE)
 month_as_numbers = match(month,month.name)
-year=as.numeric(format(date,"%Y"))
-year = year + (month_as_numbers > 7)
+year = as.numeric(format(date,"%Y"))
+year = year + (month_as_numbers > 7) # makes the year go from August to July to ensure that maxima occur near the middle of the annual period
 day_of_year=as.numeric(format(date,"%j"))
 
 plot(date,wind, main = "Wind Speeds - Time Series",
@@ -29,9 +30,6 @@ plot(date,wind, main = "Wind Speeds - Time Series",
 plot(date,ffwi, main = "FFWI - Time Series",
      xlab = "Year",
      ylab = "FFWI")
-
-# plot(month_as_numbers,wind)
-# plot(month_as_numbers,ffwi)
 
 wind_measured = !is.na(wind) # Boolean vector: if wind was measured
 ffwi_measured = !is.na(ffwi) # Boolean vector: if ffwi was measured
@@ -44,14 +42,12 @@ ffwi[!ffwi_measured] = 0
 plot(year[wind_measured], wind[wind_measured])
 plot(year[ffwi_measured], ffwi[ffwi_measured])
 
-# Auto Correlation Functions
-# acf(wind[wind_measured], lag.max = 400)
-# acf(ffwi[ffwi_measured], lag.max = 400)
-
 
 #
 # --- UNIVARIATE WIND ---
 #
+
+# Annual Maxima Approach
 wind_maxima = array(0,43) # Initialize array
 for(j in 1:43){
   wind_maxima[j]=max(wind[year==1972+j])
@@ -65,12 +61,11 @@ plot(wind_maxima_years, wind_maxima, main = "Wind Speeds - Anual Maxima",
      ylab = "Wind Speed [mph]")
 
 fit_GEV_wind = fgev(wind_maxima,method="Nelder-Mead")
-qqplot(qgumbel(c(1:42)/43),wind_maxima)
 plot(fit_GEV_wind)
 fit_GEV_wind
 plot(profile(fit_GEV_wind))
 
-# Get new indices for POT
+# POT Approach
 th = 23
 wind = as.numeric(VanNuys[,1])
 wind = jitter(wind, amount = 0.6)
@@ -100,7 +95,8 @@ fit_PP_wind_gumble
 #
 # --- UNIVARIATE FFWI ---
 #
-# TODO: check which quantile we dont exceed until ~1992
+
+# Annual Maxima Approach
 ffwi_maxima = array(0,43) # Initialize array
 for(j in 1:43){
   ffwi_maxima[j]= max(ffwi[year == 1972 +j])
@@ -114,13 +110,12 @@ ffwi_maxima_years = ffwi_maxima_years[-(1:8)]
 plot(ffwi_maxima_years,ffwi_maxima, main = "FFWI - Anual Maxima",
      xlab = "Year",
      ylab = "FFWI")
-qqplot(qgumbel(c(1:42)/43),ffwi_maxima)
 fit_GEV_ffwi = fgev(ffwi_maxima,method="Nelder-Mead")
 plot(fit_GEV_ffwi)
 fit_GEV_ffwi
 plot(profile(fit_GEV_ffwi))
 
-# Get new indices for POT
+# POT Approach
 th = 70
 plot(day_of_year[ffwi > th],ffwi[ffwi>th]-th, main = "FFWIs Exceeding 70 - Seasonal Variation",
      xlab = "Day of the Year",
@@ -142,88 +137,14 @@ fit_PP_ffwi_gumble = fpot(ffwi[ffwi_pot_indices],threshold=th,model="pp", shape=
 plot(fit_PP_ffwi_gumble)
 fit_PP_ffwi_gumble
 
-## R largest:
-# r = 9
-# ffwi_biggest = matrix(0,nrow=43,ncol=10)
-# for(j in 1:43){
-#   ffwi_biggest[j,1:10] = sort(ffwi[year==1972+j], decreasing = TRUE)[1:10]
-# }
-# ffwi_biggest = ffwi_biggest[9:42 , 1:r]
-# ffwi_biggest.vec = as.vector(t(ffwi_biggest))
-# year.vec = rep(1:34, each=r)
-# fit1 = rlarg.fit(xdat = ffwi_biggest)
-# par(mfrow = c(3,3))
-# rlarg.diag(fit1)
-
-
-# The following was replicated in the code for some reason...
-# {
-# #gumble profile 
-# fit_GEV_ffwi = fgev(ffwi_maxima,method="Nelder-Mead")
-# qqplot(qgumbel(c(1:42)/43),ffwi_maxima)
-# plot(fit_GEV_ffwi)
-# fit_GEV_ffwi
-# plot(profile(fit_GEV_ffwi))
-# }
-
-
-#Stationarity
-# plot(apply(matrix(wind[wind_measured], ncol = 20), 1, mean))
-# plot(apply(matrix(ffwi[ffwi_measured], ncol = 120), 1, mean))
-
-
-#exceedence rate
-# exceedence_per_day = array(0,366)
-# for(j in 1:366){
-#   numerator = sum(ffwi[day_of_year == 3 && ffwi_measured])
-#   exceedence_per_day[j] = length(ffwi[day_of_year==j & ffwi>th])/length(ffwi[day_of_year==j])
-# }
-# plot(c(1:366),exceedence_per_day)
-
-# abline(v=0,col=2,lty=2) # 0 not inside of the confidence intervals
-
-# deal with varying variance
-# plot(date[ffwi>th],ffwi[ffwi>th])
-# fit_GPD_ffwi_linkfit = gpd.fit(ffwi[ffwi_measured],threshold=th,ydat=as.matrix(scale(date)),sigl=1,siglink=exp)
-# gpd.diag(fit_GPD_ffwi_linkfit) #TODO: ??
-
-# 
-# ## eliminating bad data & discreteness
-# # create elimination vectors
-# good_dates = (year>1992) & (ffwi_measured) & ((day_of_year<150) | (day_of_year>280))
-# plot(good_dates)
-# 
-# #eliminate discreteness
-# # ffwi_jittered = jitter(ffwi,amount = 1.5)
-# # ffwi=ffwi_jittered
-# 
-# # choose threshold, fit GPD for good dates and check fit
-# qu.min = quantile(ffwi[good_dates], 0.5)
-# qu.max = quantile(ffwi[good_dates],(length(ffwi[good_dates])-30)/length(ffwi[good_dates]))
-# mrlplot(ffwi[good_dates], tlim=c(qu.min, qu.max))
-# tcplot(ffwi[good_dates],tlim=c(qu.min, qu.max))
-# 
-# th = 55 #TODO: check threshold assumptions
-# fit_GPD_ffwi = fpot(ffwi[good_dates],threshold=th)
-# 
-# # check fit
-# plot(fit_GPD_ffwi) #prob. plot wiggling out, QQ wiggling, density ok, return wiggling
-# 
 
 ##
-# fit PP-ffwi
-#choose threshold as before, compare with...
-# # u = quantile(ffwi[ffwi_measured],0.95)
-# fit_PP_ffwi = fpot(ffwi[good_dates],threshold=th,model="pp")
-# # plot(fit_PP_ffwi) #same as before
-
-##
-## --- CHAPTER 3: BIVARIATE ANALYSIS ---
+## --- BIVARIATE ANALYSIS ---
 ##
 
 # 3.1 - Maxima
-bivariate_years = ffwi_maxima_years
-wind_maxima = wind_maxima[-(1:8)]
+bivariate_years = ffwi_maxima_years # There are fewer FFWI observations, because the time series starts later
+wind_maxima = wind_maxima[-(1:8)] # Vectors need to be the same length
 M = cbind(bivariate_years, ffwi_maxima, wind_maxima)
 
 # One step approach
@@ -233,7 +154,7 @@ fit_bi_gev = fbvevd(M[,-1], model = "log") # TODO: try different values of model
 plot(fit_bi_gev) # "which" argument tells which plots to generate
 fit_bi_gev
 
-# Two step approach
+# Two step approach 
 fit_bi_frechet.mar1 = fgev(ffwi_maxima)
 fit_bi_frechet.mar2 = fgev(wind_maxima)
 rescaled_ffwi_maxima = qgev(pgev(ffwi_maxima, loc=fit_bi_frechet.mar1$param["loc"], scale=fit_bi_frechet.mar1$param["scale"],
@@ -245,8 +166,8 @@ fit_bi_frechet = fbvevd(cbind(rescaled_ffwi_maxima, rescaled_wind_maxima), cscal
 plot(fit_bi_frechet)
 fit_bi_frechet
 
-# 3.2 - POT
-q_ffwi = quantile(ffwi[ffwi_pot_indices], 0.95) # Seems to be okay to use 0.95. (stefano did that)
+# POT
+q_ffwi = quantile(ffwi[ffwi_pot_indices], 0.95) # Seems to be okay to use 0.95
 q_wind = quantile(wind[wind_pot_indices], 0.95)
 bi_pot_indices = wind_pot_indices & ffwi_pot_indices
 M_all = cbind(year, ffwi, wind)
@@ -255,6 +176,5 @@ plot(fit_bi_pot)
 fit_bi_pot
 
 # EVIR
-library(evir)
 fit_bi_pot_evir = gpdbiv(ffwi[bi_pot_indices], wind[bi_pot_indices], q_ffwi, q_wind)
 interpret.gpdbiv(fit_bi_pot_evir, q_ffwi, q_wind)
