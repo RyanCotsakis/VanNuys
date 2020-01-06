@@ -39,8 +39,6 @@ wind = jitter(wind,amount = 1.5)
 ffwi = jitter(ffwi,amount = 1.5)
 wind[!wind_measured] = 0
 ffwi[!ffwi_measured] = 0
-plot(year[wind_measured], wind[wind_measured])
-plot(year[ffwi_measured], ffwi[ffwi_measured])
 
 
 #
@@ -83,13 +81,11 @@ mrlplot(wind[wind_pot_indices], tlim=c(qu.min, qu.max))
 tcplot(wind[wind_pot_indices],tlim=c(qu.min, qu.max))
 exiplot(wind[wind_pot_indices], tlim=c(20,30))
 
-fit_PP_wind = fpot(wind[wind_pot_indices],threshold=th,model="pp")
-plot(fit_PP_wind)
-fit_PP_wind
-
-fit_PP_wind_gumble = fpot(wind[wind_pot_indices],threshold=th,model="pp", shape=0)
-plot(fit_PP_wind_gumble)
-fit_PP_wind_gumble
+exceedances_wind = pot(wind[wind_pot_indices],threshold=th)
+declustered_wind = decluster(exceedances_wind$data,3,picture=FALSE)
+fit_PP_declustered_wind = fpot(declustered_wind,threshold=th,model="pp")
+plot(fit_PP_declustered_wind)
+fit_PP_declustered_wind
 
 
 #
@@ -129,13 +125,11 @@ mrlplot(ffwi[ffwi_pot_indices], tlim=c(qu.min, qu.max))
 tcplot(ffwi[ffwi_pot_indices],tlim=c(qu.min, qu.max))
 exiplot(ffwi[ffwi_pot_indices], tlim=c(40,80))
 
-fit_PP_ffwi = fpot(ffwi[ffwi_pot_indices],threshold=th,model="pp")
-plot(fit_PP_ffwi)
-fit_PP_ffwi
-
-fit_PP_ffwi_gumble = fpot(ffwi[ffwi_pot_indices],threshold=th,model="pp", shape=0)
-plot(fit_PP_ffwi_gumble)
-fit_PP_ffwi_gumble
+exceedances_ffwi = pot(ffwi[ffwi_pot_indices],threshold=th)
+declustered_ffwi = decluster(exceedances_ffwi$data,3,picture=FALSE)
+fit_PP_declustered_ffwi = fpot(declustered_ffwi ,threshold=th,model="pp")
+plot(fit_PP_declustered_ffwi)
+fit_PP_declustered_ffwi
 
 
 ##
@@ -155,23 +149,23 @@ plot(fit_bi_gev) # "which" argument tells which plots to generate
 fit_bi_gev
 
 # Two step approach 
-fit_bi_frechet.mar1 = fgev(ffwi_maxima)
-fit_bi_frechet.mar2 = fgev(wind_maxima)
-rescaled_ffwi_maxima = qgev(pgev(ffwi_maxima, loc=fit_bi_frechet.mar1$param["loc"], scale=fit_bi_frechet.mar1$param["scale"],
-        shape=fit_bi_frechet.mar1$param["shape"]), loc=1, scale=1, shape=1)
-rescaled_wind_maxima = qgev(pgev(wind_maxima, loc=fit_bi_frechet.mar2$param["loc"], scale=fit_bi_frechet.mar2$param["scale"],
-        shape=fit_bi_frechet.mar2$param["shape"]), loc=1, scale=1, shape=1)
-fit_bi_frechet = fbvevd(cbind(rescaled_ffwi_maxima, rescaled_wind_maxima), cscale = TRUE, cshape = TRUE, cloc = TRUE,
-        loc1 = 1, scale1 = 1, shape1 = 1)
-plot(fit_bi_frechet)
-fit_bi_frechet
+# fit_bi_frechet.mar1 = fgev(ffwi_maxima)
+# fit_bi_frechet.mar2 = fgev(wind_maxima)
+# rescaled_ffwi_maxima = qgev(pgev(ffwi_maxima, loc=fit_bi_frechet.mar1$param["loc"], scale=fit_bi_frechet.mar1$param["scale"],
+#         shape=fit_bi_frechet.mar1$param["shape"]), loc=1, scale=1, shape=1)
+# rescaled_wind_maxima = qgev(pgev(wind_maxima, loc=fit_bi_frechet.mar2$param["loc"], scale=fit_bi_frechet.mar2$param["scale"],
+#         shape=fit_bi_frechet.mar2$param["shape"]), loc=1, scale=1, shape=1)
+# fit_bi_frechet = fbvevd(cbind(rescaled_ffwi_maxima, rescaled_wind_maxima), cscale = TRUE, cshape = TRUE, cloc = TRUE,
+#         loc1 = 1, scale1 = 1, shape1 = 1)
+# plot(fit_bi_frechet)
+# fit_bi_frechet
 
 # POT
 q_ffwi = quantile(ffwi[ffwi_pot_indices], 0.95) # Seems to be okay to use 0.95
 q_wind = quantile(wind[wind_pot_indices], 0.95)
 bi_pot_indices = wind_pot_indices & ffwi_pot_indices
 M_all = cbind(year, ffwi, wind)
-fit_bi_pot = fbvpot(M_all[bi_pot_indices,-1], c(q_ffwi, q_wind), model = "log")
+fit_bi_pot = fbvpot(M_all[bi_pot_indices,-1], c(q_ffwi, q_wind), model = "hr")
 plot(fit_bi_pot)
 fit_bi_pot
 
