@@ -1,9 +1,3 @@
-#Language setting, just in case, TODO delete
-#library(readr)
-#Sys.setlocale(locale="English")
-
-# TODO: Check dates of maxima to see if there is independence between years (eg Dec 31 to Jan 1)
-
 library(evd)
 library(evdbayes)
 library(ismev)
@@ -13,6 +7,11 @@ library(evir)
 set.seed(42) # 42: The answer to everything
 
 load("VanNuys.RData")
+
+
+#
+# --- DATA PROCESSING ---
+#
 
 date = seq(as.Date("1973-03-31"),as.Date("2015-05-31"),by="days") # Creates a date vector same length as wind and ffwi
 wind = as.numeric(VanNuys[,1])
@@ -73,6 +72,10 @@ plot(day_of_year[wind > th],wind[wind>th] - th,
      main = "Wind Speeds Exceeding 23 mph - Seasonal Variation",
      xlab = "Day of the Year",
      ylab = "Threshold Exceedance [mph]")
+plot(day_of_year[wind_measured & year >= 1998],wind[wind_measured & year >= 1998],
+     main = "Wind Speeds - Seasonal Variation",
+     xlab = "Day of the Year",
+     ylab = "Wind Speed [mph]")
 adf.test(wind[wind_pot_indices])
 
 qu.min = quantile(wind[wind_pot_indices], 0.5)
@@ -81,12 +84,18 @@ mrlplot(wind[wind_pot_indices], tlim=c(qu.min, qu.max))
 tcplot(wind[wind_pot_indices],tlim=c(qu.min, qu.max))
 exiplot(wind[wind_pot_indices], tlim=c(20,30))
 
+# Generate the approximate Retern Level Profiles
+gpd.prof(gpd.fit(wind[wind_pot_indices],threshold =  23), m=10, xlow=34.5, xup=41, npy=164, conf=0.95)
+title("Wind Speeds 10 Year Return Level Profile")
+gpd.prof(gpd.fit(wind[wind_pot_indices],threshold =  23), m=100, xlow=38, xup=51.5, npy=164, conf=0.95)
+title("Wind Speeds 100 Year Return Level Profile")
+
+# Decluster to get more accurate parameters
 exceedances_wind = pot(wind[wind_pot_indices],threshold=th)
 declustered_wind = decluster(exceedances_wind$data,3,picture=FALSE)
 fit_PP_declustered_wind = fpot(declustered_wind,threshold=th,model="pp")
 plot(fit_PP_declustered_wind)
 fit_PP_declustered_wind
-
 
 #
 # --- UNIVARIATE FFWI ---
@@ -125,6 +134,13 @@ mrlplot(ffwi[ffwi_pot_indices], tlim=c(qu.min, qu.max))
 tcplot(ffwi[ffwi_pot_indices],tlim=c(qu.min, qu.max))
 exiplot(ffwi[ffwi_pot_indices], tlim=c(40,80))
 
+# Generate the approximate Retern Level Profiles
+gpd.prof(gpd.fit(ffwi[ffwi_pot_indices],threshold =  70), m=10, xlow=95, xup=120, npy=164, conf=0.95)
+title("FFWI 10 Year Return Level Profile")
+gpd.prof(gpd.fit(ffwi[ffwi_pot_indices],threshold =  70), m=100, xlow=105, xup=160, npy=164, conf=0.95)
+title("FFWI 100 Year Return Level Profile")
+
+# Decluster
 exceedances_ffwi = pot(ffwi[ffwi_pot_indices],threshold=th)
 declustered_ffwi = decluster(exceedances_ffwi$data,3,picture=FALSE)
 fit_PP_declustered_ffwi = fpot(declustered_ffwi ,threshold=th,model="pp")
@@ -142,30 +158,17 @@ wind_maxima = wind_maxima[-(1:8)] # Vectors need to be the same length
 M = cbind(bivariate_years, ffwi_maxima, wind_maxima)
 
 # One step approach
-?fbvevd
-fit_bi_gev = fbvevd(M[,-1], model = "log") # TODO: try different values of model
-# See which models give asymmetry ==> BAD!
+?fbvevd # Lists possible choices for model parameter
+fit_bi_gev = fbvevd(M[,-1], model = "log")
 plot(fit_bi_gev) # "which" argument tells which plots to generate
 fit_bi_gev
 
-# Two step approach 
-# fit_bi_frechet.mar1 = fgev(ffwi_maxima)
-# fit_bi_frechet.mar2 = fgev(wind_maxima)
-# rescaled_ffwi_maxima = qgev(pgev(ffwi_maxima, loc=fit_bi_frechet.mar1$param["loc"], scale=fit_bi_frechet.mar1$param["scale"],
-#         shape=fit_bi_frechet.mar1$param["shape"]), loc=1, scale=1, shape=1)
-# rescaled_wind_maxima = qgev(pgev(wind_maxima, loc=fit_bi_frechet.mar2$param["loc"], scale=fit_bi_frechet.mar2$param["scale"],
-#         shape=fit_bi_frechet.mar2$param["shape"]), loc=1, scale=1, shape=1)
-# fit_bi_frechet = fbvevd(cbind(rescaled_ffwi_maxima, rescaled_wind_maxima), cscale = TRUE, cshape = TRUE, cloc = TRUE,
-#         loc1 = 1, scale1 = 1, shape1 = 1)
-# plot(fit_bi_frechet)
-# fit_bi_frechet
-
 # POT
-q_ffwi = quantile(ffwi[ffwi_pot_indices], 0.95) # Seems to be okay to use 0.95
+q_ffwi = quantile(ffwi[ffwi_pot_indices], 0.95)
 q_wind = quantile(wind[wind_pot_indices], 0.95)
 bi_pot_indices = wind_pot_indices & ffwi_pot_indices
 M_all = cbind(year, ffwi, wind)
-fit_bi_pot = fbvpot(M_all[bi_pot_indices,-1], c(q_ffwi, q_wind), model = "hr")
+fit_bi_pot = fbvpot(M_all[bi_pot_indices,-1], c(q_ffwi, q_wind), model = "log")
 plot(fit_bi_pot)
 fit_bi_pot
 
